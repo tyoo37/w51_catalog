@@ -196,13 +196,13 @@ def main():
                             #ra_skycoord = sat_cat['skycoord_fit'].ra
                             #dec_skycoord = sat_cat['skycoord_fit'].dec
 
-                            skycoord_centroid = SkyCoord(ra=ra_skycoord, dec=dec_skycoord, unit='deg', frame='icrs')
+                            #skycoord_centroid = SkyCoord(ra=ra_skycoord, dec=dec_skycoord, unit='deg', frame='icrs')
                             original_cat['skycoord_ra'] = original_cat['skycoord_centroid'].ra
                             original_cat['skycoord_dec'] = original_cat['skycoord_centroid'].dec
                             sat_cat['skycoord_ra'] = sat_cat['skycoord_fit'].ra
                             sat_cat['skycoord_dec'] = sat_cat['skycoord_fit'].dec
 
-                            selected_colnames = ['id', 'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'skycoord_ra', 'skycoord_dec', 'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog']
+                            selected_colnames = ['id',  'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'skycoord_ra', 'skycoord_dec', 'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog']
 
                             
                             selected_original_cat = original_cat[selected_colnames]

@@ -274,10 +274,11 @@ def get_saturated_stars(fitsdata,path_prefix='/orange/adamginsburg/jwst/w51/psfs
             except Exception as ex:
                 print(f"PSF photometry failed for source {i+1} at (x,y)=({xcen},{ycen}): {ex}", flush=True)
                 continue
-            result['skycoord_fit'] = ww.pixel_to_world(result['x_fit'], result['y_fit'])
             
             result['xcentroid'] = result['x_fit'] + x0
             result['ycentroid'] = result['y_fit'] + y0
+            result['skycoord_fit'] = ww.pixel_to_world(result['xcentroid'], result['ycentroid'])
+
             
             result.pprint(max_width=-1)
 
