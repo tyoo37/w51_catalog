@@ -118,19 +118,23 @@ def main():
     reg_to_field_mapping = {v:k for k,v in field_to_reg_mapping.items()}
     field = reg_to_field_mapping[target]
 
-    basepath = f'/orange/adamginsburg/jwst/{field_to_reg_mapping[field]}'
+    basepath = f'/orange/adamginsburg/jwst/w51/'
 
 
-    nircam_filters = ['F140M', 'F162M', 'F182M', 'F187N', 'F200W', 'F210M', 'F277W', 'F300M', 'F335M', 'F356W', 'F360M', 'F410M', 'F430M', 'F444W', 'F460M', 'F480M']
+    nircam_short_filters = ['F140M', 'F162M', 'F182M', 'F187N', 'F200W', 'F210M', 'F277W', ]
+    nircam_long_filters = ['F300M', 'F335M', 'F356W', 'F360M','F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F480M']
     miri_filters = ['F560W', 'F770W', 'F1000W', 'F1130W', 'F1280W', 'F1500W', 'F1800W', 'F2100W', 'F2550W']
 
 
 
     for filtername in filternames:
-        if filtername in nircam_filters:
-            modules = ['nrca', 'nrcb']
+        if filtername.upper() in nircam_short_filters:
+            modules = ['nrca1', 'nrcb1', 'nrca2', 'nrcb2', 'nrca3', 'nrcb3', 'nrca4', 'nrcb4']
             instrument = 'NIRCam'
-        elif filtername in miri_filters:
+        elif filtername.upper() in nircam_long_filters:
+            modules = ['nrcalong', 'nrcblong']
+            instrument = 'NIRCam'
+        elif filtername.upper() in miri_filters:
             modules = ['mirimage']
             instrument = 'MIRI'
         else:
@@ -154,20 +158,23 @@ def main():
                         exposure_ = f'_exp{exposurenumber:05d}'
                         visitid_ = f'_visit{int(visitid):03d}' if visitid is not None else ''
                         if instrument == 'NIRCam':
-                            vgroupid_ = f'_vgroup{int(vgroup_id)}' if vgroup_id is not None else ''
+                            vgroupid_ = f'_vgroup{int(vgroup_id):05d}' if vgroup_id is not None else ''
                         elif instrument == 'MIRI':
                             vgroupid_ = f'_vgroup{vgroup_id}' if vgroup_id is not None else ''
+                            module2 = 'mirimage'
                         detector = filename.split("_")[-2]
                         print(detector, flush=True)
                         #f360m_nrcb_visit001_vgroup3105_exp00008_daophot_basic.fits
                         #/orange/adamginsburg/jwst/w51/F360M/f360m_nrcalong_visit001_vgroup3105_exp00005_daophot_basic.fits
                     
                         wav = int(filtername[1:4])
-                        if wav < 250:
+                        if instrument == 'NIRCam' and wav < 250:
                             catalogfile = f"{basepath}/{filtername}/{filtername.lower()}_{detector}{visitid_}{vgroupid_}{exposure_}_daophot_basic.fits"
-                        else:
+                        elif instrument == 'NIRCam' and wav >= 250:
                             catalogfile = f"{basepath}/{filtername}/{filtername.lower()}_{module}{visitid_}{vgroupid_}{exposure_}_daophot_basic.fits"
-                        print(catalogfile)
+                        else:
+                            catalogfile = f"{basepath}/{filtername}/{filtername.lower()}_{module2}{visitid_}{vgroupid_}{exposure_}_daophot_basic.fits"
+                        print('catalogfile', catalogfile)
                         #f560w_mirimage_visit002_vgroup02101_exp00001_daophot_iterative.fits
                         cat = Table.read(catalogfile)
                         roundness1 = cat['roundness1']

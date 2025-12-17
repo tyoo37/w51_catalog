@@ -1,12 +1,30 @@
+import os
+os.environ['STPSF_PATH'] = '/blue/adamginsburg/t.yoo/from_red/stpsf-data'
+
 print("Starting crowdsource_catalogs_long", flush=True)
+print(f"os.environ.get: {os.environ.get('STPSF_PATH')}", flush=True)
+print(f"os.getenv: {os.getenv('STPSF_PATH')}", flush=True)
+
+# Import stpsf first, then immediately override its config
+import stpsf as webbpsf
+# Force the path to be set directly in the config
+webbpsf.conf.STPSF_PATH = '/blue/adamginsburg/t.yoo/from_red/stpsf-data'
+
+# Continue with other imports
+from webbpsf.utils import to_griddedpsfmodel
+from jwst.datamodels import dqflags
+
+# Continue with other imports
+from webbpsf.utils import to_griddedpsfmodel
 import glob
+
 import time
 import numpy
 import crowdsource
 import regions
 import numpy as np
 from functools import cache
-from astropy.convolution import convolve, Gaussian2DKernel
+from astropy.convolution import convolve, Gaussian2DKernel, interpolate_replace_nans, convolve_fft
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy.visualization import simple_norm
@@ -56,9 +74,11 @@ pl.rcParams['image.origin'] = 'lower'
 
 import os
 print("Importing webbpsf", flush=True)
-import stpsf as webbpsf
-print(f"Webbpsf version: {webbpsf.__version__}")
-from webbpsf.utils import to_griddedpsfmodel
+print(f"STPSF_PATH before stpsf import: {os.environ.get('STPSF_PATH')}", flush=True)
+
+#import stpsf as webbpsf
+#print(f"Webbpsf version: {webbpsf.__version__}")
+#from webbpsf.utils import to_griddedpsfmodel
 import datetime
 print("Done with imports", flush=True)
 import sys
@@ -346,7 +366,10 @@ def save_crowdsource_results(results, ww, filename, suffix,
     if visitid_:
         stars.meta['visit'] = int(visitid_[-3:])
     if vgroupid_:
-        stars.meta['vgroup'] = int(vgroupid_[-4:])
+        try:
+            stars.meta['vgroup'] = int(vgroupid_[-4:])
+        except ValueError:
+            stars.meta['vgroup'] = vgroupid_[-4:]
 
     if 'RAOFFSET' in im1[0].header:
         stars.meta['RAOFFSET'] = im1[0].header['RAOFFSET']
@@ -388,11 +411,7 @@ def save_crowdsource_results(results, ww, filename, suffix,
 def load_data(filename):
     fh = fits.open(filename)
     im1 = fh
-    im1.info()
-    try:
-        data = im1[1].data
-    except:
-        data = im1[0].data
+    data = im1['SCI'].data
     try:
         wht = im1['WHT'].data
     except KeyError:
@@ -451,7 +470,13 @@ def get_psf_model(filtername, proposal_id, field,
             ntries += 1
             try:
                 print("Attempting to download WebbPSF data", flush=True)
-                nrc = webbpsf.MIRI()
+                if filtername.upper() in ['F140M', 'F150W', 'F162M', 'F164N', 'F182M', 'F187N',
+                                  'F200W', 'F210M', 'F212N', 'F250M', 'F300M', 'F322W2',
+                                  'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W',
+                                  'F460M', 'F466N', 'F480M']:
+                    nrc = webbpsf.NIRCam()
+                else:
+                    nrc = webbpsf.MIRI()
                 nrc.load_wss_opd_by_date(f'{obsdate}T00:00:00')
                 nrc.filter = filtername
                 if module in ('nrca', 'nrcb'):
@@ -480,6 +505,8 @@ def get_psf_model(filtername, proposal_id, field,
                     continue
 
         if use_grid:
+            if isinstance(grid, list):
+                grid = grid[0]
             return grid, WrappedPSFModel(grid, stampsz=stampsz)
         else:
             # there's no way to use a grid across all detectors.
@@ -736,7 +763,11 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
                        visit_id=None, vgroup_id=None,
                        bg_boxsizes=None,
                        use_webbpsf=False,
+                       nsigma=5,
                        pupil='clear'):
+    """
+    nsigma is the threshold to multiply the error estimate by to get the detection threshold
+    """
     print(f"Starting {field} filter {filtername} module {module} detector {detector} {exposurenumber}", flush=True)
     fwhm_tbl = Table.read(f'{basepath}/reduction/fwhm_table.ecsv')
     row = fwhm_tbl[fwhm_tbl['Filter'] == filtername]
@@ -761,7 +792,7 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
     print(f"Starting cataloging on {filename}", flush=True)
     fh, im1, data, wht, err, instrument, telescope, obsdate = load_data(filename)
 
-    # set up coordinate system 
+    # set up coordinate system
     ww = wcs.WCS(im1[1].header)
     pixscale = ww.proj_plane_pixel_area()**0.5
     cen = ww.pixel_to_world(im1[1].shape[1]/2, im1[1].shape[0]/2)
@@ -804,7 +835,13 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
 
     filter_table = SvoFps.get_filter_list(facility=telescope, instrument=instrument)
     filter_table.add_index('filterID')
-    instrument = 'MIRI'
+    if filtername.upper() in ['F140M', 'F150W', 'F162M', 'F164N', 'F182M', 'F187N',
+                          'F200W', 'F210M', 'F212N', 'F250M', 'F300M', 'F322W2',
+                          'F335M', 'F356W', 'F360M', 'F410M', 'F430M', 'F444W',
+                          'F460M', 'F466N', 'F480M']:
+        instrument = 'NIRCam'
+    else:
+        instrument = 'MIRI'
     eff_wavelength = filter_table.loc[f'{telescope}/{instrument}.{filt}']['WavelengthEff'] * u.AA
 
     # DAO Photometry setup
@@ -816,14 +853,32 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
     filtered_errest = np.nanmedian(err)
     print(f'Error estimate for DAO from median(err): {filtered_errest}', flush=True)
 
-    daofind_tuned = DAOStarFinder(threshold=4 * filtered_errest,
+    daofind_tuned = DAOStarFinder(threshold=nsigma * filtered_errest,
                                   fwhm=fwhm_pix, roundhi=1.0, roundlo=-1.0,
                                   sharplo=0.30, sharphi=1.40)
     #daofind_tuned = DAOStarFinder(threshold=4 * filtered_errest,
     #                              fwhm=fwhm_pix, roundhi=0.8, roundlo=-0.9,
     #                              sharplo=0.25, sharphi=1.20)
     print("Finding stars with daofind_tuned", flush=True)
-    finstars = daofind_tuned(np.nan_to_num(data))
+
+    # empirically determined in debugging session with Taehwa on 2025-12-09:
+    # with just nan_to_num, setting pixels to zero, some stars got "erased"
+    kernel = Gaussian2DKernel(x_stddev=fwhm_pix/2.355)
+    mask = np.isnan(data)
+    if 'DQ' in im1:
+        dqarr = im1['DQ'].data
+        is_saturated = (dqarr & dqflags.pixel['SATURATED']) != 0
+        # we want original data_ to be untouched for imshowing diagnostics etc.
+        data_ = data.copy()
+        data_[is_saturated] = np.nan
+        mask |= is_saturated
+    else:
+        data_ = data
+
+    nan_replaced_data = interpolate_replace_nans(data_, kernel, convolve=convolve_fft)
+
+    finstars = daofind_tuned(nan_replaced_data,
+                             mask=mask)
 
     print(f"Found {len(finstars)} with daofind_tuned", flush=True)
     # for diagnostic plotting convenience
@@ -893,7 +948,8 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
         if False: # why do the unweighted version?
             print()
             print("starting crowdsource unweighted", flush=True)
-            results_unweighted = fit_im(np.nan_to_num(data), psf_model, weight=np.ones_like(data)*np.nanmedian(weight),
+            results_unweighted = fit_im(nan_replaced_data, psf_model,
+                                        weight=np.ones_like(data)*np.nanmedian(weight)*(~mask),
                                         # psfderiv=np.gradient(-psf_initial[0].data),
                                         dq=dq,
                                         nskyx=0, nskyy=0, refit_psf=False, verbose=True,
@@ -951,11 +1007,11 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
                 print()
                 print(f"Running crowdsource fit_im with weights & nskyx=nskyy={nsky} & fpsf={fpsf} & blur={blur_}")
                 print(f"data.shape={data.shape} weight_shape={weight.shape}", flush=True)
-                results = fit_im(np.nan_to_num(data), psf_model, weight=weight,
-                                    nskyx=nsky, nskyy=nsky, refit_psf=refit_psf, verbose=True,
-                                    dq=dq,
-                                    **crowdsource_default_kwargs
-                                    )
+                results = fit_im(nan_replaced_data, psf_model, weight=weight * (~mask),
+                                 nskyx=nsky, nskyy=nsky, refit_psf=refit_psf, verbose=True,
+                                 dq=dq,
+                                 **crowdsource_default_kwargs
+                                 )
                 print(f"Done with weighted, refit={fpsf}, nsky={nsky} crowdsource. dt={time.time() - t0}")
                 stars, modsky, skymsky, psf = results
                 stars = save_crowdsource_results(results, ww, filename,
@@ -1015,7 +1071,8 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
                        (finstars['sharpness'] < 0.8))
 
             print(f"Extracting {epsfsel.sum()} stars")
-            stars = extract_stars(NDData(data=np.nan_to_num(data)), finstars[epsfsel], size=25)
+            # TODO: we might need to figure out how to tell extract_stars what's masked
+            stars = extract_stars(NDData(data=nan_replaced_data), finstars[epsfsel], size=25)
 
             # reject stars with negative pixels
             #stars = EPSFStars([x for x in stars if x.data.min() >= 0])
@@ -1055,7 +1112,7 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
                             )
 
         print("About to do BASIC photometry....")
-        result = phot_basic(np.nan_to_num(data))
+        result = phot_basic(nan_replaced_data, mask=mask)
         # I want to use daofind params in the future
         result['roundness1'] = finstars['roundness1']
         result['roundness2'] = finstars['roundness2']
@@ -1140,7 +1197,7 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
                        (finstars['sharpness'] < 0.8))
 
             print(f"Extracting {epsfsel.sum()} stars")
-            stars = extract_stars(NDData(data=np.nan_to_num(data)), finstars[epsfsel], size=35)
+            stars = extract_stars(NDData(data=nan_replaced_data), finstars[epsfsel], size=35)
 
             # reject stars with negative pixels
             #stars = EPSFStars([x for x in stars if x.data.min() >= 0])
@@ -1178,7 +1235,7 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
                                           )
 
         print("About to do ITERATIVE photometry....")
-        result2 = phot_iter(data)
+        result2 = phot_iter(nan_replaced_data, mask=mask)
         print(f"Done with ITERATIVE photometry. len(result2)={len(result2)}  dt={time.time() - t0}")
 
         # need to flag stars near negative stars, so we don't want to exclude them _yet_

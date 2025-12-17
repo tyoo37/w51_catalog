@@ -2,8 +2,9 @@
 mem=64gb
 taskname=catalog
 
+export STPSF_PATH=/blue/adamginsburg/t.yoo/from_red/stpsf-data
 
-
+echo $STPSF_PATH
 daoloop=("--daophot --skip-crowdsource" " ")
 mem=64gb
 #filter=F140M
@@ -12,12 +13,12 @@ mem=64gb
 #sbatch --array=0-1 --job-name=webb-cat-${filter}-${module}-eachexp --output=webb-cat-${filter}-${module}-eachexp_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /home/t.yoo/w51/w51_nircam/catalog/crowdsource_catalogs_long.py --filternames=${filter} --modules=${module} --each-exposure ${dao}"
 
 
-
+#for filter in F560W; do
 for filter in F560W F770W F1000W F1280W F2100W ; do
     for module in mirimage; do
-        for dao in "${daoloop[@]}"; do
-            sbatch --array=0-32 --job-name=webb-cat-miri-${filter}-${module}-eachexp --output=webb-cat-${filter}-${module}-eachexp_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /red/adamginsburg/t.yoo/w51/w51_catalog/py/create_catalog.py --filternames=${filter} --modules=${module} --each-exposure ${dao} --target=w51_miri"
-        done
+        
+        sbatch --array=0-32 --job-name=webb-cat-miri-${filter}-${module}-eachexp --output=webb-cat-${filter}-${module}-eachexp_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/py/create_catalog.py --filternames=${filter} --modules=${module} --each-exposure ${dao} --target=w51_miri"
+        
         
     done
 done
