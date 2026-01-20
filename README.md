@@ -15,3 +15,6 @@ JWST W51 NIRCam/MIRI cataloging process
 5. merging_catalog_nircam.py / merging_catalog_miri.py : merge the catalog from individual frame. also merge across filters.
    -> outputs: for the catalog where individual frame is merged: catalogs/..._indivexp_merged_...
              : for the catalog where all the filters are merged: catalogs/..._photometry_tables_merged_...
+6. notebook/fix_miri_offset.ipynb
+7. notebook/merge_nircam_miri.ipynb
+   
