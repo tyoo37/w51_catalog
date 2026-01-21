@@ -837,7 +837,7 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
     filter_table.add_index('filterID')
     if filtername.upper() in ['F140M', 'F150W', 'F162M', 'F164N', 'F182M', 'F187N',
                           'F200W', 'F210M', 'F212N', 'F250M', 'F300M', 'F322W2',
-                          'F335M', 'F356W', 'F360M', 'F410M', 'F430M', 'F444W',
+                          'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W',
                           'F460M', 'F466N', 'F480M']:
         instrument = 'NIRCam'
     else:

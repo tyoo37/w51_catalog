@@ -34,7 +34,7 @@ mem=64gb
 #done
 
 
-for filter in F335M F360M F405N F410M F480M ; do
+for filter in F405N; do
     for module in nrcalong nrcblong; do
         for dao in "${daoloop[@]}"; do
             sbatch --array=0-23 --job-name=webb-cat-${filter}-${module}-eachexp --output=webb-cat-${filter}-${module}-eachexp_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/py/create_catalog.py --filternames=${filter} --modules=${module} --each-exposure ${dao}"

@@ -708,7 +708,19 @@ def merge_individual_frames(module='merged', suffix="", desat=False, filtername=
     if len(tblfns) == 0:
         raise ValueError(f"No tables found matching {basepath}/{filtername.upper()}/{filtername.lower()}_{module}....{desat}{bgsub}{fitpsf}{blur_}_{method}{suffix}.fits")
 
-    tables = [Table.read(fn) for fn in tblfns]
+    #tables = [Table.read(fn) for fn in tblfns]
+    tables = []
+    for fn in tblfns:
+        tbl = Table.read(fn)
+        ra = tbl['skycoord_centroid'].ra
+        nan_idx = np.isnan(ra)
+        if np.any(nan_idx):
+            print(f"Warning: found {nan_idx.sum()} NaN ra values in {fn}; removing these rows")
+            tbl = tbl[~nan_idx]
+        tables.append(tbl)  
+        
+
+    
     for tb, fn in zip(tables, tblfns):
         if 'exposure' not in tb.meta:
             tb.meta['exposure'] = fn.split("_exp")[-1][:5]
@@ -720,7 +732,9 @@ def merge_individual_frames(module='merged', suffix="", desat=False, filtername=
 
     outfn = f"{basepath}/catalogs/{filtername.lower()}_{module}_indivexp_merged{desat}{bgsub}{fitpsf}{blur_}_{method}{suffix}_allcols.fits"
     print(f"Writing {outfn} with length {len(merged_exposure_table)}")
+    
     merged_exposure_table.write(outfn, overwrite=True)
+    
 
     # make a table that is nearly equivalent to standard tables (with no 'x' or 'y' coordinate)
     minimal_version = {colname: merged_exposure_table[f'{colname}_avg']
@@ -812,7 +826,17 @@ def merge_crowdsource(module='nrca', suffix="", desat=False, bgsub=False,
         if min_qf is not None:
             tbl = tbl[tbl['qf'] > min_qf]
         return tbl
-    tbls = [read_cat(catfn) for catfn in tqdm(catfns, desc='Reading Tables')]
+    #tbls = [read_cat(catfn) for catfn in tqdm(catfns, desc='Reading Tables')]
+    tbls = []
+    for catfn in tqdm(catfns, desc='Reading Tables'):
+        tbl = Table.read(catfn)
+        ra = tbl['skycoord'].ra
+        nan_idx = np.isnan(ra)
+        non_nan = ~nan_idx
+        if np.any(~non_nan):
+            print(f"Removing {np.sum(~non_nan)} rows with nan RA from table {tbl.meta['filename']}")
+            tbl = tbl[non_nan]
+        tbls.append(tbl)
 
     for catfn, tbl in zip(catfns, tbls):
         tbl.meta['filename'] = catfn
@@ -919,10 +943,23 @@ def merge_daophot(module='nrca', detector='', daophot_type='basic', desat=False,
             for filtername in filternames
         ]
 
-    tbls = [Table.read(catfn) for catfn in catfns]
+    #tbls = [Table.read(catfn) for catfn in catfns]
+    tbls = []
+    for catfn in catfns:
+        tbl = Table.read(catfn)
+        ra = tbl['skycoord'].ra
+        nan_idx = np.isnan(ra)
+        non_nan = ~nan_idx
+        if np.any(~non_nan):
+            print(f"Removing {np.sum(~non_nan)} rows with nan RA from table {tbl.meta['filename']}")
+            tbl = tbl[non_nan]
+        tbls.append(tbl)
+    
     for catfn, tbl, filtername in zip(catfns, tbls, filternames):
         tbl.meta['filename'] = catfn
         tbl.meta['filter'] = filtername
+        
+        
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

@@ -8,7 +8,9 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "env": {
-                "STPSF_PATH": "/blue/adamginsburg/t.yoo/from_red/stpsf-data"
+                "STPSF_PATH": "/blue/adamginsburg/t.yoo/from_red/stpsf-data",
+                "WEBBPSF_PATH": "/blue/adamginsburg/t.yoo/from_red/stpsf-data"
+
             }
         }
     ]

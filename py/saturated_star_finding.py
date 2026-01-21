@@ -1,4 +1,7 @@
 # original file : https://github.com/keflavich/brick-jwst-2221/blob/main/brick2221/reduction/saturated_star_finding.py
+import os
+os.environ['STPSF_PATH'] = '/blue/adamginsburg/t.yoo/from_red/stpsf-data'
+
 import glob
 from astropy.io import fits
 from scipy.ndimage import label, find_objects, center_of_mass, sum_labels
@@ -141,6 +144,7 @@ def get_saturated_stars(fitsdata,path_prefix='/orange/adamginsburg/jwst/w51/psfs
     dq = fitsdata['DQ'].data
     saturated = (dq & dqflags.pixel['SATURATED'])>0 
     sources, nsource = label(saturated)
+    print('nsources=', nsource, flush=True)
     sizes = sum_labels(saturated, sources, np.arange(nsource)+1)
     msfe = min_sep_from_edge
 
@@ -188,8 +192,8 @@ def get_saturated_stars(fitsdata,path_prefix='/orange/adamginsburg/jwst/w51/psfs
     size = pad = 81
 
     index = 0
-    print(f"Found {nsource-1} saturated sources to process", flush=True)
-    for i in range(nsource-1):
+    print(f"Found {nsource} saturated sources to process", flush=True)
+    for i in range(nsource):
         if True:
             # get the center of pixels with this label
             
@@ -415,6 +419,8 @@ def remove_saturated_stars(filename, save_suffix='_unsatstar', **kwargs):
     
 
 def main():
+    import os
+    os.environ['STPSF_PATH'] = '/blue/adamginsburg/t.yoo/from_red/stpsf-data'
 
     from optparse import OptionParser
     parser = OptionParser()
@@ -431,7 +437,7 @@ def main():
         if filt in ['F140M', 'F162M', 'F182M', 'F187N', 'F210M', 'F335M', 'F360M', 'F405N', 'F410M', 'F480M']:
             globlist = glob.glob(f"/orange/adamginsburg/jwst/w51/{filt}/pipeline/*{module}*align*crf.fits")
         else:
-            globlist = glob.glob(f"/orange/adamginsburg/jwst/w51/{filt}/pipeline/*miri_*_crf.fits")
+            globlist = glob.glob(f"/orange/adamginsburg/jwst/w51/{filt}/pipeline/*mirimage_cal.fits")
         for i, fn in enumerate(globlist):
             print()
             print(fn)

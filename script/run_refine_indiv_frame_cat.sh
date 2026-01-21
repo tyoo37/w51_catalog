@@ -11,9 +11,9 @@ mem=64gb
 
 
 #for filter in F560W; do
-#for filter in F140M F162M F182M F187N F210M F335M F360M F410M F405N F480M; do
-#    sbatch --job-name=refine-${filter} --output=refine-${filter}_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/py/refine_indv_frame_cat.py --filternames=${filter} --target=w51"
-#done
+for filter in F140M F162M F182M F187N F210M F335M F360M F410M F405N F480M; do
+    sbatch --job-name=refine-${filter} --output=refine-${filter}_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/py/refine_indv_frame_cat.py --filternames=${filter} --target=w51"
+done
 
 #for filter in F335M F360M F410M F405N F480M ; do
     

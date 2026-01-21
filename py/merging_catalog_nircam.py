@@ -708,7 +708,16 @@ def merge_individual_frames(module='merged', suffix="", desat=False, filtername=
     if len(tblfns) == 0:
         raise ValueError(f"No tables found matching {basepath}/{filtername.upper()}/{filtername.lower()}_{module}....{desat}{bgsub}{fitpsf}{blur_}_{method}{suffix}.fits")
 
-    tables = [Table.read(fn) for fn in tblfns]
+    #tables = [Table.read(fn) for fn in tblfns]
+    tables = []
+    for fn in tblfns:
+        tbl = Table.read(fn)
+        ra = tbl['skycoord_centroid'].ra
+        nan_idx = np.isnan(ra)
+        if np.any(nan_idx):
+            print(f"Warning: found {nan_idx.sum()} NaN ra values in {fn}; removing these rows")
+            tbl = tbl[~nan_idx]
+        tables.append(tbl)  
     for tb, fn in zip(tables, tblfns):
         if 'exposure' not in tb.meta:
             tb.meta['exposure'] = fn.split("_exp")[-1][:5]
@@ -919,7 +928,16 @@ def merge_daophot(module='nrca', detector='', daophot_type='basic', desat=False,
             for filtername in filternames
         ]
 
-    tbls = [Table.read(catfn) for catfn in catfns]
+    #tbls = [Table.read(catfn) for catfn in catfns]
+    tbls = []
+    for catfn in catfns:
+        tbl = Table.read(catfn)
+        ra = tbl['skycoord'].ra
+        nan_idx = np.isnan(ra)
+        if np.any(nan_idx):
+            print(f"Warning: found {nan_idx.sum()} NaN ra values in {catfn}; removing these rows")
+            tbl = tbl[~nan_idx]
+        tbls.append(tbl)
     for catfn, tbl, filtername in zip(catfns, tbls, filternames):
         tbl.meta['filename'] = catfn
         tbl.meta['filter'] = filtername
@@ -1280,13 +1298,13 @@ def main():
     parser.add_option('--max-expnum', dest='max_expnum', default=24, type='int')
     parser.add_option('--indiv-merge-methods', dest='indiv_merge_methods', default='dao,crowdsource,daoiterative')
     (options, args) = parser.parse_args()
-
     modules = options.modules.split(",")
+    #modules = options.modules.split(",")
     target = options.target
     indiv_merge_methods = options.indiv_merge_methods.split(",")
     print("Options:", options)
 
-    basepath = f'/orange/adamginsburg/{target}/jwst/'
+    basepath = f'/orange/adamginsburg/w51/jwst/'
     print('basepath:', basepath)
     offsets_tables = {'1182': Table.read(f'/blue/adamginsburg/adamginsburg/jwst/brick/offsets/Offsets_JWST_Brick1182_F444ref.csv'),
                       '2221': None,
@@ -1296,6 +1314,7 @@ def main():
     index = -1
 
     for module in modules:
+    #if True:
         for desat in (False, True):
             for bgsub in (False, True):
                 for epsf in (False, True):

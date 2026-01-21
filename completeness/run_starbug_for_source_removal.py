@@ -154,49 +154,47 @@ def create_apfile(image, catalogfile, outputfilename, radius=1.5, sky_in=3, sky_
     tab_ap['sky'] = sky
     tab_ap['flux'] = apcorr*(phot["aperture_sum_0"] - (sky*apertures.area))
     tab_ap["flux"][tab_ap["flux"]==0]=np.nan
-    tab_ap.write(catalogfile.replace('.fits','-ap.fits'), format='fits', overwrite=True)
+
+    print('tab_ap', tab_ap)
+    tab_ap.write(outputfilename, format='fits', overwrite=True)
     print(f"Created aperture file {outputfilename}")
+    if not os.path.exists(outputfilename):
+        raise ValueError(f"AP file {outputfilename} not found after creation")
     return tab_ap
 
 def main():
-    from optparse import OptionParser
-    parser = OptionParser()
-    parser.add_option("-f", "--filternames", dest="filternames",
-                    default='F140M',
-                    help="filter name list", metavar="filternames")
-    parser.add_option("--proposal_id", dest="proposal_id",
-                    default='6151',
-                    help="proposal_id", metavar="proposal_id")
-    parser.add_option("--target", dest="target",
-                    default='w51',
-                    help="target", metavar="target")
-    parser.add_option("--modules", dest="modules",
-                    default='miri',
-                    help="modules", metavar="modules")
-    (options, args) = parser.parse_args()    
-    proposal_id = options.proposal_id
-    target = options.target
-    filternames = options.filternames.split(",")
-    modules = options.modules.split(",")
-    print('modules', modules, flush=True)
+    
+    proposal_id = '6151'
+    filternames = ['F140M', 'F162M', 'F187N', 'F182M', 'F210M', 'F335M', 'F360M', 'F405N',
+     'F410M', 'F480M', 'F560W', 'F770W', 'F1000W', 'F1280W', 'F2100W']
 
-    field_to_reg_mapping = {'2221': {'001': 'brick', '002': 'cloudc'},
-                                '1182': {'004': 'brick'},
-                                '6151': {'001': 'w51', '002': 'w51_miri'}}[proposal_id]
-    reg_to_field_mapping = {v:k for k,v in field_to_reg_mapping.items()}
-    field = reg_to_field_mapping[target]
 
     basepath = f'/orange/adamginsburg/jwst/w51'
-
-    cmd = ["starbug2", "--local-param" ]
+    #paramdir = '/blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/completeness/starbug_params'
+   
+    cmd = ["starbug2", "--local-params"]
 
     result = subprocess.run(cmd, capture_output=True, text=True)  
 
-
     if True:
-        for module in modules:
+        for filtername in filternames:
             #detector = module # no sub-detectors for long-NIRCAM
-            for filtername in filternames:
+            if filtername in ['F140M', 'F162M', 'F187N', 'F182M', 'F210M']:
+                modules = ['nrca1', 'nrca2', 'nrca3', 'nrca4', 'nrcb1', 'nrcb2', 'nrcb3', 'nrcb4']
+                target = 'w51'
+            elif filtername in ['F335M', 'F360M', 'F410M', 'F405N', 'F480M']:
+                modules = ['nrcalong', 'nrcblong']
+                target = 'w51'
+            elif filtername in ['F560W', 'F770W', 'F1000W', 'F1280W', 'F2100W']:
+                modules = ['mirimage']
+                target = 'w51_miri'
+            
+            field_to_reg_mapping = {'2221': {'001': 'brick', '002': 'cloudc'},
+                                        '1182': {'004': 'brick'},
+                                        '6151': {'001': 'w51', '002': 'w51_miri'}}[proposal_id]
+            reg_to_field_mapping = {v:k for k,v in field_to_reg_mapping.items()}
+            field = reg_to_field_mapping[target]
+            for module in modules:
                 if True:
                     for visitid in range(1, nvisits[proposal_id][target] + 1):
                         visitid = f'{visitid:03d}'
@@ -219,9 +217,23 @@ def main():
                                 print('catalogfile:', catalogfile)
                                 #catalog = fits.open(catalogfile)
                                 # change the format of the catalog accordingly to be used in starbug2
+                                
 
                                 # step ii) using refined catalogs, run starbugs2 to remove background for each exposure file
                                 print('create starbug2 param file')
+                                img = fits.open(filename)['SCI'].data
+                                err = fits.open(filename)['ERR'].data
+
+                                fwhm_tbl = Table.read(f'{basepath}/reduction/fwhm_table.ecsv')
+                                row = fwhm_tbl[fwhm_tbl['Filter'] == filtername]
+                                fwhm = fwhm_arcsec = float(row['PSF FWHM (arcsec)'][0])
+                                fwhm_pix = float(row['PSF FWHM (pixel)'][0])
+                                ap_file = catalogfile.replace('.fits','-ap.fits')
+
+                                create_apfile(img, catalogfile, ap_file, error=err, radius= 2.0*fwhm_pix, sky_in=3.0*fwhm_pix, sky_out=4.0*fwhm_pix, apcorr=1.0)
+                                if not os.path.exists(ap_file):
+                                    raise ValueError(f"AP file {ap_file} not found")
+                                update_param('starbug.param', 'AP_FILE', f"{ap_file}")
                                 update_param('starbug.param', 'SHARP_LO', '0.3')
                                 update_param('starbug.param', 'SHARP_HI', '1.4')
                                 update_param('starbug.param', 'SIGSRC', '4.0')
@@ -231,21 +243,12 @@ def main():
                                 print('output_file', output_file)
                                 update_param('starbug.param', 'OUTPUT', output_file)
                                 update_param('starbug.param', 'FILTER', f"{filtername.upper()}")
-                                img = fits.open(filename)['SCI'].data
-                                err = fits.open(filename)['ERR'].data
-
-                                fwhm_tbl = Table.read(f'{basepath}/reduction/fwhm_table.ecsv')
-                                row = fwhm_tbl[fwhm_tbl['Filter'] == filtername]
-                                fwhm = fwhm_arcsec = float(row['PSF FWHM (arcsec)'][0])
-                                fwhm_pix = float(row['PSF FWHM (pixel)'][0])
-                                ap_file = output_file.split('.')[0]+'-ap.fits'
-
-                                create_apfile(img, catalogfile, ap_file, error=err, radius= 4.0*fwhm_pix, sky_in=6.0*fwhm_pix, sky_out=8.0*fwhm_pix, apcorr=1.0)
-
-                                update_param('starbug.param', 'AP_FILE', f"{ap_file}")
+                                update_param('starbug.param', 'HDUNAME', 'SCI')
+                                cmd = ['starbug2', '--update-param']
+                                result = subprocess.run(cmd, capture_output=True, text=True)
+                    
                         
-                                if not os.path.exists(ap_file):
-                                    raise ValueError(f"AP file {ap_file} not found")
+                                
                                 print('make catalog for starbug2')
                                 
                                 cmd = ["starbug2", "-vd", f"{ap_file}", '-B', f"{filename}"]
@@ -257,9 +260,9 @@ def main():
                                 else:
                                     print(f"starbug2 output: {result.stdout}")
 
-                                outputfile = f"{filename.replace('.fits','_starbug2-bgd.fits')}"
-                                if not os.path.exists(outputfile):
-                                    raise ValueError(f"Output file {outputfile} not found")
+                                outfile = f"{filename.replace('.fits','_starbug2-bgd.fits')}"
+                                if not os.path.exists(outfile):
+                                    raise ValueError(f"Output file {outfile} not found")
 
     # step iii) using the same coordinates of the orignal catalog, do PSF photometry on the background subtracted images
 if __name__ == "__main__":

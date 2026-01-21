@@ -1,6 +1,11 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "jupyter.kernelEnvironmentVariables": {
+        "STPSF_PATH": "/blue/adamginsburg/t.yoo/from_red/stpsf-data",
+        "WEBBPSF_PATH": "/blue/adamginsburg/t.yoo/from_red/stpsf-data"
+
+    }
     
 }

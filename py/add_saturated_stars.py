@@ -69,13 +69,13 @@ print("Done with imports", flush=True)
 
 
 
-def get_filenames(basepath, filtername, proposal_id, field, each_suffix, module, pupil='clear', visitid='001'):
+def get_filenames(basepath, filtername, proposal_id, field, each_suffix, module, pupil='clear',):
 
     # jw01182004002_02101_00012_nrcalong_destreak_o004_crf.fits
     # jw02221001001_07101_00012_nrcalong_destreak_o001_crf.fits
     # jw02221001001_05101_00022_nrcb3_destreak_o001_crf.fits
     glstr = f'{basepath}/{filtername}/pipeline/jw0{proposal_id}*{module}*_{each_suffix}.fits'
-    
+    print(f"Looking for files with glob string: {glstr}", flush=True)
   
     fglob = glob.glob(glstr)
     for st in fglob:
@@ -118,19 +118,23 @@ def main():
     reg_to_field_mapping = {v:k for k,v in field_to_reg_mapping.items()}
     field = reg_to_field_mapping[target]
 
-    basepath = f'/orange/adamginsburg/jwst/{field_to_reg_mapping[field]}'
+    basepath = f'/orange/adamginsburg/jwst/w51'
     
 
-    nircam_filters = ['F140M', 'F162M', 'F182M', 'F187N', 'F200W', 'F210M', 'F277W', 'F300M', 'F335M', 'F356W', 'F360M', 'F410M', 'F430M', 'F444W', 'F460M', 'F480M']
+    nircam_short_filters = ['F140M', 'F162M', 'F182M', 'F187N', 'F200W', 'F210M', 'F277W', ]
+    nircam_long_filters = ['F300M', 'F335M', 'F356W', 'F360M','F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F480M']
     miri_filters = ['F560W', 'F770W', 'F1000W', 'F1130W', 'F1280W', 'F1500W', 'F1800W', 'F2100W', 'F2550W']
 
 
 
     for filtername in filternames:
-        if filtername in nircam_filters:
-            modules = ['nrca', 'nrcb']
+        if filtername.upper() in nircam_short_filters:
+            modules = ['nrca1', 'nrcb1', 'nrca2', 'nrcb2', 'nrca3', 'nrcb3', 'nrca4', 'nrcb4']
             instrument = 'NIRCam'
-        elif filtername in miri_filters:
+        elif filtername.upper() in nircam_long_filters:
+            modules = ['nrcalong', 'nrcblong']
+            instrument = 'NIRCam'
+        elif filtername.upper() in miri_filters:
             modules = ['mirimage']
             instrument = 'MIRI'
         else:
@@ -142,7 +146,7 @@ def main():
                 visitid = f'{visitid:03d}'
                 
                 filenames = get_filenames(basepath, filtername, proposal_id,
-                                            field, visitid=visitid,
+                                            field,
                                             each_suffix='cal',
                                             module=module, pupil='clear')
                 for i, filename in enumerate(filenames):
@@ -154,19 +158,23 @@ def main():
                         exposure_ = f'_exp{exposurenumber:05d}'
                         visitid_ = f'_visit{int(visitid):03d}' if visitid is not None else ''
                         if instrument == 'NIRCam':
-                            vgroupid_ = f'_vgroup{int(vgroup_id)}' if vgroup_id is not None else ''
+                            vgroupid_ = f'_vgroup{int(vgroup_id):05d}' if vgroup_id is not None else ''
                         elif instrument == 'MIRI':
                             vgroupid_ = f'_vgroup{vgroup_id}' if vgroup_id is not None else ''
+                            module2 = 'mirimage'
                         detector = filename.split("_")[-2]
                         print(detector, flush=True)
                         #f360m_nrcb_visit001_vgroup3105_exp00008_daophot_basic.fits
                         #/orange/adamginsburg/jwst/w51/F360M/f360m_nrcalong_visit001_vgroup3105_exp00005_daophot_basic.fits
-                    
+                        print('vgroup_id', vgroup_id, flush=True)
+                        print('vgroupid_', vgroupid_, flush=True)
                         wav = int(filtername[1:4])
-                        if wav < 250:
+                        if instrument == 'NIRCam' and wav < 250:
                             catalogfile = f"{basepath}/{filtername}/{filtername.lower()}_{detector}{visitid_}{vgroupid_}{exposure_}_daophot_refined.fits"
-                        else:
+                        elif instrument == 'NIRCam' and wav >= 250:
                             catalogfile = f"{basepath}/{filtername}/{filtername.lower()}_{module}{visitid_}{vgroupid_}{exposure_}_daophot_refined.fits"
+                        else:
+                            catalogfile = f"{basepath}/{filtername}/{filtername.lower()}_{module2}{visitid_}{vgroupid_}{exposure_}_daophot_refined.fits"
 
                         #f140m_nrca4_visit001_vgroup3109_exp00003_daophot_basic.fits
                         #jw06151001001_03109_00005_nrcb3_destreak_o001_crf_satstar_catalog_satstars_catalog_recentered.fits
@@ -179,8 +187,10 @@ def main():
                             #jw06151001001_03103_00008_nrcb1_align_o001_crf_satstar_catalog_satstars_catalog_recentered.fits
                         if instrument == 'NIRCam':
                             sat_catalogfile = f"{basepath}/{filtername}/pipeline/jw0{proposal_id}{field}{visitid}_{vgroup_id}_{exposure_id}_{detector}_align_o{visitid}_crf_satstar_catalog_newnewnewnew.fits"
-                        else:
-                            sat_catalogfile = f"{basepath}/{filtername}/pipeline/jw0{proposal_id}{field}{visitid}_{vgroup_id}_{exposure_id}_{module}_align_o{visitid}_crf_satstar_catalog_newnewnewnew.fits"
+                        else: #/orange/adamginsburg/jwst/w51/F1000W/pipeline/jw06151001001_02105_00004_mirimage_align_o001_crf_satstar_catalog_newnewnewnew.fit
+                            #Saved saturated star catalog to /orange/adamginsburg/jwst/w51/F1000W/pipeline/jw06151002002_0210f_00004_mirimage_cal_satstar_catalog_newnewnewnew.fits
+
+                            sat_catalogfile = f"{basepath}/{filtername}/pipeline/jw0{proposal_id}{field}{visitid}_{vgroup_id}_{exposure_id}_mirimage_cal_satstar_catalog_newnewnewnew.fits"
 
                         print(f"Updating {catalogfile} with {sat_catalogfile}", flush=True)
                         original_cat = Table.read(catalogfile)
@@ -201,6 +211,7 @@ def main():
                             original_cat['skycoord_dec'] = original_cat['skycoord_centroid'].dec
                             sat_cat['skycoord_ra'] = sat_cat['skycoord_fit'].ra
                             sat_cat['skycoord_dec'] = sat_cat['skycoord_fit'].dec
+                        #['id', 'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog', 'skycoord_centroid']
 
                             selected_colnames = ['id',  'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'skycoord_ra', 'skycoord_dec', 'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog']
 
@@ -220,14 +231,21 @@ def main():
                             combined_cat['skycoord_centroid'] = SkyCoord(ra=combined_cat['skycoord_ra'], dec=combined_cat['skycoord_dec'], unit='deg', frame='icrs')
                             combined_cat.remove_columns(['skycoord_ra', 'skycoord_dec'])
                         else:
-                            selected_colnames = ['id', 'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'skycoord_centroid',  'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog']
+                            print(f"Saturated star catalog {sat_catalogfile} does not exist. Using original catalog only.", flush=True)
+                            selected_colnames = ['id',  'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'skycoord_ra', 'skycoord_dec', 'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog']
+                            original_cat['skycoord_ra'] = original_cat['skycoord_centroid'].ra
+                            original_cat['skycoord_dec'] = original_cat['skycoord_centroid'].dec
                             original_cat['from_sat_catalog'] = False
                             combined_cat = original_cat[selected_colnames]
-                        
-                        combined_cat_filename = f"{basepath}/{filtername}/{filtername.lower()}_{detector}{visitid_}{vgroupid_}{exposure_}_daophot_combined_with_satstars.fits"
+                        if instrument == 'NIRCam' and wav < 250:
+                            combined_cat_filename = f"{basepath}/{filtername}/{filtername.lower()}_{detector}{visitid_}{vgroupid_}{exposure_}_daophot_combined_with_satstars.fits"
+                        elif instrument == 'NIRCam' and wav >= 250:
+                            combined_cat_filename = f"{basepath}/{filtername}/{filtername.lower()}_{module}{visitid_}{vgroupid_}{exposure_}_daophot_combined_with_satstars.fits"
+                        else:
+                            combined_cat_filename = f"{basepath}/{filtername}/{filtername.lower()}_{module2}{visitid_}{vgroupid_}{exposure_}_daophot_combined_with_satstars.fits"
 
                         combined_cat.write(combined_cat_filename, overwrite=True)
-                    
+                        print(f"Wrote combined catalog to {combined_cat_filename}", flush=True)
 
                                 #original_cat.write(catalogfile, overwrite=True)
                             

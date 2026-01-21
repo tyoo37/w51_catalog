@@ -177,6 +177,10 @@ def main():
                         print('catalogfile', catalogfile)
                         #f560w_mirimage_visit002_vgroup02101_exp00001_daophot_iterative.fits
                         cat = Table.read(catalogfile)
+                        #from_sat_catalog = cat['from_sat_catalog']
+                        
+                        #non_sat_cat = cat[~from_sat_catalog]
+                   
                         roundness1 = cat['roundness1']
                         roundness2 = cat['roundness2']
                         sharpness = cat['sharpness']
@@ -195,13 +199,16 @@ def main():
                             & (snr > 3) & (qfit < 0.33) & (cfit < 0.2) & (cfit > -0.2) & ~((snr < 20) & (flux > 50)))
                             
                         elif instrument == 'MIRI':
-                            good_sources = ((roundness1 < 0.7) & (roundness1 > -0.7) & (roundness2 < 0.5) & (roundness2 > -0.5) & (sharpness < 1.1) & (sharpness>0.4) 
-                            & (snr > 3) & (qfit < 0.6) & (cfit < 0.06) & (cfit > -0.06))
-                        
+                            #good_sources = ((roundness1 < 0.7) & (roundness1 > -0.7) & (roundness2 < 0.5) & (roundness2 > -0.5) & (sharpness < 1.1) & (sharpness>0.4) 
+                            #& (snr > 3) & (qfit < 0.6) & (cfit < 0.06) & (cfit > -0.06))
+                            good_sources = ((roundness1 < 0.8) & (roundness1 > -0.8) & (roundness2 < 0.5) & (roundness2 > -0.5) & (sharpness < 1.1) & (sharpness>0.4) 
+                            & (snr > 3) & (qfit < 1.0) & (cfit < 0.06) & (cfit > -0.06) )
+                       # refined_cat = non_sat_cat[good_sources]
+                       # final_cat = vstack([refined_cat, cat[from_sat_catalog]])
                         refined_cat = cat[good_sources]
-                        print(f"Filter {filtername} Module {module} Visit {visitid} Exposure {exposure_id}: {len(cat)} sources, {len(refined_cat)} after quality cuts", flush=True)
                         outcatfile = catalogfile.replace('_daophot_basic.fits', '_daophot_refined.fits')
                         refined_cat.write(outcatfile, overwrite=True)
+                        print(f"Wrote refined catalog to {outcatfile} from {catalogfile}", flush=True)
 
 if __name__ == "__main__":
     main()
