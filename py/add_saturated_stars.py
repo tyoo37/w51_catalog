@@ -235,8 +235,12 @@ def main():
                             selected_colnames = ['id',  'local_bkg', 'flux_fit', 'flux_err', 'qfit', 'cfit', 'skycoord_ra', 'skycoord_dec', 'roundness1', 'roundness2', 'sharpness', 'dra', 'ddec', 'from_sat_catalog']
                             original_cat['skycoord_ra'] = original_cat['skycoord_centroid'].ra
                             original_cat['skycoord_dec'] = original_cat['skycoord_centroid'].dec
+                            original_cat['skycoord_centroid'] = SkyCoord(ra=original_cat['skycoord_ra'], dec=original_cat['skycoord_dec'], unit='deg', frame='icrs')
                             original_cat['from_sat_catalog'] = False
                             combined_cat = original_cat[selected_colnames]
+                            combined_cat.remove_columns(['skycoord_ra', 'skycoord_dec'])
+
+                            
                         if instrument == 'NIRCam' and wav < 250:
                             combined_cat_filename = f"{basepath}/{filtername}/{filtername.lower()}_{detector}{visitid_}{vgroupid_}{exposure_}_daophot_combined_with_satstars.fits"
                         elif instrument == 'NIRCam' and wav >= 250:

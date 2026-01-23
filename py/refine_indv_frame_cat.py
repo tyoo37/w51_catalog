@@ -197,7 +197,7 @@ def main():
                         if instrument == 'NIRCam':              
                             good_sources = ((roundness1 < 0.8) & (roundness1 > -0.9) & (roundness2 < 0.6) & (roundness2 > -0.6) & (sharpness < 1.2) & (sharpness>0.25) 
                             & (snr > 3) & (qfit < 0.33) & (cfit < 0.2) & (cfit > -0.2) & ~((snr < 20) & (flux > 50)))
-                            
+
                         elif instrument == 'MIRI':
                             #good_sources = ((roundness1 < 0.7) & (roundness1 > -0.7) & (roundness2 < 0.5) & (roundness2 > -0.5) & (sharpness < 1.1) & (sharpness>0.4) 
                             #& (snr > 3) & (qfit < 0.6) & (cfit < 0.06) & (cfit > -0.06))

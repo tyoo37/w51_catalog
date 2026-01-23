@@ -158,8 +158,14 @@ def shift_individual_catalog(tbl, offsets_table, verbose=True):
     assert match.sum() == 1
     row = offsets_table[match]
 
-    raoffset = tbl.meta['RAOFFSET'] * u.arcsec
-    decoffset = tbl.meta['DEOFFSET'] * u.arcsec
+    if 'RAOFFSET' in tbl.meta:
+        raoffset = tbl.meta['RAOFFSET'] * u.arcsec
+        decoffset = tbl.meta['DEOFFSET'] * u.arcsec
+    else:
+        # not measured, so we have to assume zero
+        raoffset = 0 * u.arcsec
+        decoffset = 0 * u.arcsec
+
 
     dra = row['dra'][0]*u.arcsec
     ddec = row['ddec'][0]*u.arcsec
@@ -283,14 +289,18 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         tbl.meta['dec_offset'] = medsep_dec
         tbl.meta['dra_offset'] = dmedsep_ra
         tbl.meta['ddec_offset'] = dmedsep_dec
-        """
+        
         with fits.open(tbl.meta['FILENAME']) as fh:
-            dra_header = fh['SCI'].header['RAOFFSET']
-            ddec_header = fh['SCI'].header['DEOFFSET']
+            if 'RAOFFSET' in fh['SCI'].header:
+                dra_header = fh['SCI'].header['RAOFFSET']
+                ddec_header = fh['SCI'].header['DEOFFSET']
+            else:
+                dra_header = 0.0
+                ddec_header = 0.0
 
         print(f"Exposure {tbl.meta['exposure']} {tbl.meta['MODULE' if 'MODULE' in tbl.meta else '']} was offset by {medsep_ra.to(u.marcsec):10.3f}+/-{dmedsep_ra.to(u.marcsec):7.3f},"
               f" {medsep_dec.to(u.marcsec):10.3f}+/-{dmedsep_dec.to(u.marcsec):7.3f} based on {oksep.sum()} matches.  dra={dra_header:7.5g} ddec={ddec_header:7.5g}")
-        """
+        
         # for tbl0, should be nan (all self-match)
         if realign and not np.isnan(medsep_ra) and not np.isnan(medsep_dec):
             newcrds = SkyCoord(crds.ra - medsep_ra, crds.dec - medsep_dec, frame=crds.frame)
@@ -712,6 +722,8 @@ def merge_individual_frames(module='merged', suffix="", desat=False, filtername=
     tables = []
     for fn in tblfns:
         tbl = Table.read(fn)
+        print(f"Reading {fn}")
+        print(tbl.colnames)
         ra = tbl['skycoord_centroid'].ra
         nan_idx = np.isnan(ra)
         if np.any(nan_idx):
