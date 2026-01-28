@@ -221,6 +221,74 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         skycoord_colname = 'skycoord_centroid'
         #column_names = (flux_colname, flux_error_colname, 'qfit', 'cfit', 'flux_init', 'flags', 'local_bkg', 'iter_detected', 'group_id', 'group_size', 'ra', 'dec', 'dra', 'ddec', )
         column_names = (flux_colname, flux_error_colname, 'qfit', 'cfit', 'flux_init', 'flags', 'local_bkg', 'iter_detected', 'group_id', 'group_size', 'ra', 'dec', 'roundness1', 'roundness2', 'sharpness', 'from_sat_catalog')
+        
+    # TH added additional loop in the first place to add saturated stars from all table into the first table (25/01/28)
+    for ii, tbl in enumerate(tbls):
+        if ii == 0:
+            basetbl = tbl
+        else:
+            is_saturated = tbl['from_sat_catalog'] if 'from_sat_catalog' in tbl.colnames else np.zeros(len(tbl), dtype=bool)
+            basetbl = table.vstack([basetbl, tbl[is_saturated]])
+   
+    def remove_close_duplicates(basetbl, separation_threshold=0.1*u.arcsec):
+        """
+        Remove stars that are within separation_threshold of each other.
+        Keep saturated stars or brighter stars with priority.
+        
+        Parameters
+        ----------
+        basetbl : astropy.table.Table
+            Table with sky coordinates and 'from_sat_catalog' column
+        separation_threshold : astropy.units.Quantity
+            Maximum separation to consider stars as duplicates
+        
+        Returns
+        -------
+        filtered_table : astropy.table.Table
+            Table with duplicates removed
+        """
+        # Create SkyCoord object from the table
+        coords = SkyCoord(basetbl['ra'], basetbl['dec'], unit=(u.deg, u.deg))
+        
+        # Find pairs within threshold
+        idx1, idx2, sep, _ = coords.search_around_sky(coords, separation_threshold)
+        
+        # Remove self-matches
+        mask = idx1 < idx2
+        idx1, idx2 = idx1[mask], idx2[mask]
+        
+        # Determine which stars to remove
+        to_remove = set()
+        
+        for i, j in zip(idx1, idx2):
+            if i in to_remove or j in to_remove:
+                continue
+                
+            # Check saturation status
+            sat_i = basetbl['from_sat_catalog'][i]
+            sat_j = basetbl['from_sat_catalog'][j]
+            
+            if sat_i and not sat_j:
+                to_remove.add(j)
+            elif sat_j and not sat_i:
+                to_remove.add(i)
+            else:
+                # Both saturated or both unsaturated - compare flux
+                flux_i = basetbl['flux_fit'][i]  # Adjust column name as needed
+                flux_j = basetbl['flux_fit'][j]
+                
+                if flux_i >= flux_j:
+                    to_remove.add(j)
+                else:
+                    to_remove.add(i)
+        
+        # Create mask for rows to keep
+        keep_mask = np.ones(len(basetbl), dtype=bool)
+        keep_mask[list(to_remove)] = False
+        
+        return basetbl[keep_mask]
+    
+    basetbl = remove_close_duplicates(basetbl, separation_threshold=min_offset)    
     for ii, tbl in enumerate(tbls):
         crds = tbl[skycoord_colname]
         if ii == 0:
@@ -237,10 +305,10 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
 
             # also replace basecrds with new crds if the closest neighbor has from_sat_catalog true
             # this is to prioritize the catalog from saturated star catalog over the original catalog as they are more accurate for bright stars or dealing with bad pixels
-            if 'from_sat_catalog' in tbl.colnames:
-                replace_to = (tbl['from_sat_catalog']) & (sep <= min_offset)
-                replace_from = matches[replace_to]
-                basecrds[replace_from] = crds[replace_to]
+            #if 'from_sat_catalog' in tbl.colnames:
+            #    replace_to = (tbl['from_sat_catalog']) & (sep <= min_offset)
+            #    replace_from = matches[replace_to]
+            #    basecrds[replace_from] = crds[replace_to]
 
             newcrds = crds[keep]
             basecrds = SkyCoord([basecrds, newcrds])
@@ -291,8 +359,12 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         tbl.meta['ddec_offset'] = dmedsep_dec
         
         with fits.open(tbl.meta['FILENAME']) as fh:
-            dra_header = fh['SCI'].header['RAOFFSET']
-            ddec_header = fh['SCI'].header['DEOFFSET']
+            if 'RAOFFSET' in fh['SCI'].header:
+                dra_header = fh['SCI'].header['RAOFFSET']
+                ddec_header = fh['SCI'].header['DEOFFSET']
+            else:
+                dra_header = 0.0
+                ddec_header = 0.0
 
         print(f"Exposure {tbl.meta['exposure']} {tbl.meta['MODULE' if 'MODULE' in tbl.meta else '']} was offset by {medsep_ra.to(u.marcsec):10.3f}+/-{dmedsep_ra.to(u.marcsec):7.3f},"
               f" {medsep_dec.to(u.marcsec):10.3f}+/-{dmedsep_dec.to(u.marcsec):7.3f} based on {oksep.sum()} matches.  dra={dra_header:7.5g} ddec={ddec_header:7.5g}")
@@ -692,7 +764,7 @@ def merge_individual_frames(module='merged', suffix="", desat=False, filtername=
         # flux_colname = 'flux_fit'
     elif method in ('dao', 'daophot' , 'basic', 'daobasic', 'iterative', 'daoiterative','dao_after_merger'):
         flux_error_colname = 'flux_err'
-        column_names = ('flux_fit', flux_error_colname, 'skycoord', 'qfit', 'cfit', 'flux_init', 'flags', 'local_bkg', 'iter_detected', 'group_size', 'roundness1', 'roundness2', 'sharpness')
+        column_names = ('flux_fit', flux_error_colname, 'skycoord', 'qfit', 'cfit', 'flux_init', 'flags', 'local_bkg', 'iter_detected', 'group_size', 'roundness1', 'roundness2', 'sharpness', 'from_sat_catalog')
         # flux_colname = 'flux'
         method_suffix = 'daophot'
     else:
@@ -829,7 +901,17 @@ def merge_crowdsource(module='nrca', suffix="", desat=False, bgsub=False,
         if min_qf is not None:
             tbl = tbl[tbl['qf'] > min_qf]
         return tbl
-    tbls = [read_cat(catfn) for catfn in tqdm(catfns, desc='Reading Tables')]
+    #tbls = [read_cat(catfn) for catfn in tqdm(catfns, desc='Reading Tables')]
+    tbls = []
+    for catfn in tqdm(catfns, desc='Reading Tables'):
+        tbl = Table.read(catfn)
+        ra = tbl['skycoord'].ra
+        nan_idx = np.isnan(ra)
+        non_nan = ~nan_idx
+        if np.any(~non_nan):
+            print(f"Removing {np.sum(~non_nan)} rows with nan RA from table {tbl.meta['filename']}")
+            tbl = tbl[non_nan]
+        tbls.append(tbl)
 
     for catfn, tbl in zip(catfns, tbls):
         tbl.meta['filename'] = catfn
