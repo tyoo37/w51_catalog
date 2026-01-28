@@ -266,7 +266,14 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         sat2 = sat[idx2]
         one_not_saturated = (sat1 & ~sat2) | ((~sat1) & sat2)
         idx1_is_brighter = (flux[idx1] >= flux[idx2])
-        keep = (~one_not_saturated) & idx1_is_brighter
+        both_saturated = (sat1 & sat2)
+        neither_saturated = (~sat1) | (~sat2)
+        # either_saturated = ~neither_saturated
+        keep1 = idx1[(one_not_saturated & sat1) | (idx1_is_brighter & both_saturated) | (neither_saturated)]
+        keep2 = idx2[(one_not_saturated & sat2) | ((~idx1_is_brighter) & both_saturated)]
+        keep = ~mask
+        keep[keep1] = True
+        keep[keep2] = True
 
         return basetable[keep_mask]
     
