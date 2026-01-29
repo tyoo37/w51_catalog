@@ -259,34 +259,23 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         
         # Determine which stars to remove
         to_remove = set()
-        
-        for i, j in zip(idx1, idx2):
-            if i in to_remove or j in to_remove:
-                continue
-                
-            # Check saturation status
-            sat_i = basetbl['from_sat_catalog'][i]
-            sat_j = basetbl['from_sat_catalog'][j]
-            
-            if sat_i and not sat_j:
-                to_remove.add(j)
-            elif sat_j and not sat_i:
-                to_remove.add(i)
-            else:
-                # Both saturated or both unsaturated - compare flux
-                flux_i = basetbl['flux_fit'][i]  # Adjust column name as needed
-                flux_j = basetbl['flux_fit'][j]
-                
-                if flux_i >= flux_j:
-                    to_remove.add(j)
-                else:
-                    to_remove.add(i)
-        
-        # Create mask for rows to keep
-        keep_mask = np.ones(len(basetbl), dtype=bool)
-        keep_mask[list(to_remove)] = False
-        
-        return basetbl[keep_mask]
+
+        sat = basetable['from_sat_catalog']
+        flux = basetable['flux_fit']
+        sat1 = sat[idx1]
+        sat2 = sat[idx2]
+        one_not_saturated = (sat1 & ~sat2) | ((~sat1) & sat2)
+        idx1_is_brighter = (flux[idx1] >= flux[idx2])
+        both_saturated = (sat1 & sat2)
+        neither_saturated = (~sat1) | (~sat2)
+        # either_saturated = ~neither_saturated
+        keep1 = idx1[(one_not_saturated & sat1) | (idx1_is_brighter & both_saturated) | (neither_saturated)]
+        keep2 = idx2[(one_not_saturated & sat2) | ((~idx1_is_brighter) & both_saturated)]
+        keep = ~mask
+        keep[keep1] = True
+        keep[keep2] = True
+
+        return basetable[keep_mask]
     
     basetbl = remove_close_duplicates(basetbl, separation_threshold=min_offset)
 
