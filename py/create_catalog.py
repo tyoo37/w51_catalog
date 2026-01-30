@@ -1,14 +1,12 @@
 import os
-os.environ['STPSF_PATH'] = '/blue/adamginsburg/t.yoo/from_red/stpsf-data'
 
-print("Starting crowdsource_catalogs_long", flush=True)
-print(f"os.environ.get: {os.environ.get('STPSF_PATH')}", flush=True)
-print(f"os.getenv: {os.getenv('STPSF_PATH')}", flush=True)
+
+print("Starting cataloging", flush=True)
+
 
 # Import stpsf first, then immediately override its config
 import stpsf as webbpsf
-# Force the path to be set directly in the config
-webbpsf.conf.STPSF_PATH = '/blue/adamginsburg/t.yoo/from_red/stpsf-data'
+
 
 # Continue with other imports
 from webbpsf.utils import to_griddedpsfmodel
@@ -650,8 +648,10 @@ def main(smoothing_scales={'f182m': 0.25, 'f187n':0.25, 'f212n':0.55,
                             '6151': {'001': 'w51', '002':'w51_miri'}}[proposal_id]
     reg_to_field_mapping = {v:k for k,v in field_to_reg_mapping.items()}
     field = reg_to_field_mapping[target]
-
-    basepath = f'/orange/adamginsburg/jwst/w51/'
+    target_dir = target
+    if proposal_id == '6151' and target == 'w51_miri':
+        target_dir = 'w51'
+    basepath = f'/orange/adamginsburg/jwst/{target_dir}/'
 
     pl.close('all')
 
@@ -869,83 +869,15 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
         dqarr = im1['DQ'].data
         is_saturated = (dqarr & dqflags.pixel['SATURATED']) != 0
         # we want original data_ to be untouched for imshowing diagnostics etc.
+        # also want 1 pixel buffer around saturated pixels (Jan 30, 2026, TH added to solve F405N issue)
+        is_saturated = ndimage.binary_dilation(is_saturated, iterations=1)
         data_ = data.copy()
         data_[is_saturated] = np.nan
         mask |= is_saturated
     else:
         data_ = data
 
-    def check_sources_validity(data, mask, sources, fit_shape):
-        """
-        Remove sources that would be completely masked during fitting.
-        Vectorized version for performance with large catalogs.
-        
-        Parameters
-        ----------
-        data : array
-            Image data
-        mask : array or None
-            Boolean mask (True = masked/bad pixels)
-        sources : Table
-            Source catalog with 'xcentroid' and 'ycentroid' columns
-        fit_shape : tuple
-            Shape of the fitting region (e.g., (5, 5))
-        
-        Returns
-        -------
-        valid_sources : Table
-            Sources with sufficient unmasked pixels
-        bad_sources : Table
-            Sources that were filtered out
-        """
-        if mask is None:
-            return sources, sources[np.zeros(len(sources), dtype=bool)]
-        
-        t0 = time.time()
-        fit_half = np.array(fit_shape) // 2
-        
-        # Vectorized coordinate calculations
-        xcen = np.round(sources['xcentroid']).astype(int)
-        ycen = np.round(sources['ycentroid']).astype(int)
-        
-        # Calculate all boundaries at once
-        ymin = np.maximum(0, ycen - fit_half[0])
-        ymax = np.minimum(data.shape[0], ycen + fit_half[0] + 1)
-        xmin = np.maximum(0, xcen - fit_half[1])
-        xmax = np.minimum(data.shape[1], xcen + fit_half[1] + 1)
-        
-        # Check for edge cases (fit region too small)
-        valid_mask = ((ymax - ymin) >= fit_shape[0] * 0.5) & ((xmax - xmin) >= fit_shape[1] * 0.5)
-        
-        # For sources not at edges, check masking in vectorized manner
-        # This is faster than looping when we have many sources
-        mask_fractions = np.zeros(len(sources))
-        
-        for idx in np.where(valid_mask)[0]:
-            fit_region_mask = mask[ymin[idx]:ymax[idx], xmin[idx]:xmax[idx]]
-            if fit_region_mask.size == 0:
-                valid_mask[idx] = False
-            else:
-                mask_fractions[idx] = np.sum(fit_region_mask) / fit_region_mask.size
-                # Mark as invalid if >80% masked or completely masked
-                if mask_fractions[idx] > 0.8:
-                    valid_mask[idx] = False
-        
-        valid_sources = sources[valid_mask]
-        bad_sources = sources[~valid_mask]
-        
-        print(f"Source validity check took {time.time() - t0:.2f}s for {len(sources)} sources", flush=True)
-        print(f"Filtered out {len(bad_sources)} sources ({100*len(bad_sources)/len(sources):.1f}%)", flush=True)
-        
-        # Show some examples of filtered sources
-        if len(bad_sources) > 0:
-            n_examples = min(5, len(bad_sources))
-            for idx in np.random.choice(len(bad_sources), n_examples, replace=False):
-                src_idx = np.where(~valid_mask)[0][idx]
-                print(f"  Example filtered source: ({xcen[src_idx]}, {ycen[src_idx]}), "
-                    f"mask fraction: {mask_fractions[src_idx]:.2f}", flush=True)
-        
-        return valid_sources, bad_sources
+    
 
 
     nan_replaced_data = interpolate_replace_nans(data_, kernel, convolve=convolve_fft)
@@ -953,20 +885,6 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
     finstars = daofind_tuned(nan_replaced_data,
                              mask=mask)
 
-    finstars_filtered, bad_sources = check_sources_validity(nan_replaced_data, mask, finstars, (5, 5))
-
-    print(f"Found {len(finstars)} with daofind_tuned", flush=True)
-    if len(bad_sources) > 0:
-        print(f"Filtered out {len(bad_sources)} problematic sources. {len(finstars_filtered)} sources remaining.", flush=True)
-        # Optionally save the bad sources for inspection
-        bad_sources['x'] = bad_sources['xcentroid']
-        bad_sources['y'] = bad_sources['ycentroid']
-        bad_sources['skycoord'] = ww.pixel_to_world(bad_sources['x'], bad_sources['y'])
-        bad_sources.write(f'{basepath}/{filtername}/pipeline/jw0{proposal_id}-o{field}_t001_nircam_{pupil}-{filtername.lower()}-{module}{visitid_}{vgroupid_}{exposure_}{desat}{bgsub}_filtered_bad_sources.fits', 
-                         overwrite=True)
-    
-    # Use filtered sources for photometry
-    finstars = finstars_filtered
     
     # for diagnostic plotting convenience
     finstars['x'] = finstars['xcentroid']
