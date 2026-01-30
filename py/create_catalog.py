@@ -875,12 +875,99 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
     else:
         data_ = data
 
+    def check_sources_validity(data, mask, sources, fit_shape):
+        """
+        Remove sources that would be completely masked during fitting.
+        Vectorized version for performance with large catalogs.
+        
+        Parameters
+        ----------
+        data : array
+            Image data
+        mask : array or None
+            Boolean mask (True = masked/bad pixels)
+        sources : Table
+            Source catalog with 'xcentroid' and 'ycentroid' columns
+        fit_shape : tuple
+            Shape of the fitting region (e.g., (5, 5))
+        
+        Returns
+        -------
+        valid_sources : Table
+            Sources with sufficient unmasked pixels
+        bad_sources : Table
+            Sources that were filtered out
+        """
+        if mask is None:
+            return sources, sources[np.zeros(len(sources), dtype=bool)]
+        
+        t0 = time.time()
+        fit_half = np.array(fit_shape) // 2
+        
+        # Vectorized coordinate calculations
+        xcen = np.round(sources['xcentroid']).astype(int)
+        ycen = np.round(sources['ycentroid']).astype(int)
+        
+        # Calculate all boundaries at once
+        ymin = np.maximum(0, ycen - fit_half[0])
+        ymax = np.minimum(data.shape[0], ycen + fit_half[0] + 1)
+        xmin = np.maximum(0, xcen - fit_half[1])
+        xmax = np.minimum(data.shape[1], xcen + fit_half[1] + 1)
+        
+        # Check for edge cases (fit region too small)
+        valid_mask = ((ymax - ymin) >= fit_shape[0] * 0.5) & ((xmax - xmin) >= fit_shape[1] * 0.5)
+        
+        # For sources not at edges, check masking in vectorized manner
+        # This is faster than looping when we have many sources
+        mask_fractions = np.zeros(len(sources))
+        
+        for idx in np.where(valid_mask)[0]:
+            fit_region_mask = mask[ymin[idx]:ymax[idx], xmin[idx]:xmax[idx]]
+            if fit_region_mask.size == 0:
+                valid_mask[idx] = False
+            else:
+                mask_fractions[idx] = np.sum(fit_region_mask) / fit_region_mask.size
+                # Mark as invalid if >80% masked or completely masked
+                if mask_fractions[idx] > 0.8:
+                    valid_mask[idx] = False
+        
+        valid_sources = sources[valid_mask]
+        bad_sources = sources[~valid_mask]
+        
+        print(f"Source validity check took {time.time() - t0:.2f}s for {len(sources)} sources", flush=True)
+        print(f"Filtered out {len(bad_sources)} sources ({100*len(bad_sources)/len(sources):.1f}%)", flush=True)
+        
+        # Show some examples of filtered sources
+        if len(bad_sources) > 0:
+            n_examples = min(5, len(bad_sources))
+            for idx in np.random.choice(len(bad_sources), n_examples, replace=False):
+                src_idx = np.where(~valid_mask)[0][idx]
+                print(f"  Example filtered source: ({xcen[src_idx]}, {ycen[src_idx]}), "
+                    f"mask fraction: {mask_fractions[src_idx]:.2f}", flush=True)
+        
+        return valid_sources, bad_sources
+
+
     nan_replaced_data = interpolate_replace_nans(data_, kernel, convolve=convolve_fft)
 
     finstars = daofind_tuned(nan_replaced_data,
                              mask=mask)
 
+    finstars_filtered, bad_sources = check_sources_validity(nan_replaced_data, mask, finstars, (5, 5))
+
     print(f"Found {len(finstars)} with daofind_tuned", flush=True)
+    if len(bad_sources) > 0:
+        print(f"Filtered out {len(bad_sources)} problematic sources. {len(finstars_filtered)} sources remaining.", flush=True)
+        # Optionally save the bad sources for inspection
+        bad_sources['x'] = bad_sources['xcentroid']
+        bad_sources['y'] = bad_sources['ycentroid']
+        bad_sources['skycoord'] = ww.pixel_to_world(bad_sources['x'], bad_sources['y'])
+        bad_sources.write(f'{basepath}/{filtername}/pipeline/jw0{proposal_id}-o{field}_t001_nircam_{pupil}-{filtername.lower()}-{module}{visitid_}{vgroupid_}{exposure_}{desat}{bgsub}_filtered_bad_sources.fits', 
+                         overwrite=True)
+    
+    # Use filtered sources for photometry
+    finstars = finstars_filtered
+    
     # for diagnostic plotting convenience
     finstars['x'] = finstars['xcentroid']
     finstars['y'] = finstars['ycentroid']
@@ -1005,7 +1092,7 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
             for nsky in (0, ): #1, ):
                 t0 = time.time()
                 print()
-                print(f"Running crowdsource fit_im with weights & nskyx=nskyy={nsky} & fpsf={fpsf} & blur={blur_}")
+                print(f"Running crowdsource fit_im with weights & nskyx=nskyy={nsky} & fps f={fpsf} & blur={blur_}")
                 print(f"data.shape={data.shape} weight_shape={weight.shape}", flush=True)
                 results = fit_im(nan_replaced_data, psf_model, weight=weight * (~mask),
                                  nskyx=nsky, nskyy=nsky, refit_psf=refit_psf, verbose=True,

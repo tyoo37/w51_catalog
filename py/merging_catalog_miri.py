@@ -227,9 +227,9 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         if ii == 0:
             basetbl = tbl
         else:
-            is_saturated = tbl['from_sat_catalog'] if 'from_sat_catalog' in tbl.colnames else np.zeros(len(tbl), dtype=bool)
-            basetbl = table.vstack([basetbl, tbl[is_saturated]])
-   
+            #is_saturated = tbl['from_sat_catalog'] if 'from_sat_catalog' in tbl.colnames else np.zeros(len(tbl), dtype=bool)
+            basetbl = table.vstack([basetbl, tbl])
+    print(basetbl.colnames)
     def remove_close_duplicates(basetbl, separation_threshold=0.1*u.arcsec):
         """
         Remove stars that are within separation_threshold of each other.
@@ -248,7 +248,7 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
             Table with duplicates removed
         """
         # Create SkyCoord object from the table
-        coords = SkyCoord(basetbl['ra'], basetbl['dec'], unit=(u.deg, u.deg))
+        coords = basetbl['skycoord_centroid']
         
         # Find pairs within threshold
         idx1, idx2, sep, _ = coords.search_around_sky(coords, separation_threshold)
@@ -260,14 +260,14 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         # Determine which stars to remove
         to_remove = set()
 
-        sat = basetable['from_sat_catalog']
-        flux = basetable['flux_fit']
+        sat = basetbl['from_sat_catalog']
+        flux = basetbl['flux_fit']
         sat1 = sat[idx1]
         sat2 = sat[idx2]
         one_not_saturated = (sat1 & ~sat2) | ((~sat1) & sat2)
         idx1_is_brighter = (flux[idx1] >= flux[idx2])
         both_saturated = (sat1 & sat2)
-        neither_saturated = (~sat1) | (~sat2)
+        neither_saturated = (~sat1) & (~sat2)
         # either_saturated = ~neither_saturated
         keep1 = idx1[(one_not_saturated & sat1) | (idx1_is_brighter & both_saturated) | (neither_saturated)]
         keep2 = idx2[(one_not_saturated & sat2) | ((~idx1_is_brighter) & both_saturated)]
@@ -275,7 +275,7 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         keep[keep1] = True
         keep[keep2] = True
 
-        return basetable[keep_mask]
+        return basetbl[keep]
     
     basetbl = remove_close_duplicates(basetbl, separation_threshold=min_offset)
 
@@ -1417,7 +1417,7 @@ def main():
                                             # skip ahead to merge-all-indiv step
                                             continue
                                         index += 1
-                                        print(index, filtername, progid, obs_filters[target][progid])
+                                        print(index, filtername, progid, obs_filters[target][progid], blur, fitpsf, epsf, bgsub, desat, module)
                                         # enable array jobs based only on filters
                                         if os.getenv('SLURM_ARRAY_TASK_ID') is not None and int(os.getenv('SLURM_ARRAY_TASK_ID')) != index:
                                             print(f'Task={os.getenv("SLURM_ARRAY_TASK_ID")} does not match index {index}')
