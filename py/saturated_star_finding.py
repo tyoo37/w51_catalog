@@ -53,7 +53,7 @@ def get_psf(header, path_prefix='.'):
     try:
         assert ww.wcs.cdelt[1] != 1, "This is not a valid WCS!!! CDELT is wrong!! how did this HAPPEN!?!?"
     except AssertionError as ex:
-        print(ex) 
+        print(ex)
         print("ignoring WCS failure so check that stuff is right...")
 
     psfgen.filter = filtername
@@ -188,33 +188,33 @@ def get_saturated_stars(fitsdata,path_prefix='/orange/adamginsburg/jwst/w51/psfs
     
     slices = find_objects(saturated)
     
-        # define pad/size/fwhm_pix (choose sensible defaults if not already set)
+    # define pad/size/fwhm_pix (choose sensible defaults if not already set)
     size = pad = 81
 
-    index = 0
+   
     print(f"Found {nsource} saturated sources to process", flush=True)
-    for i in range(nsource):
-        if True:
+    for ii in range(nsource):
+        if True: # to keep indentation level same
             # get the center of pixels with this label
             
             com = center_of_mass(saturated, labels=sources, index=i+1)
             # center_of_mass can return (nan, nan) for degenerate labels; guard against that
             if com is None:
-                print(f"Source {i+1}: center_of_mass returned None; skipping", flush=True)
+                print(f"Source {ii+1}: center_of_mass returned None; skipping", flush=True)
                 continue
             yf, xf = com
             if not (np.isfinite(yf) and np.isfinite(xf)):
-                print(f"Source {i+1}: center_of_mass returned NaN or infinite values ({yf}, {xf}); skipping", flush=True)
+                print(f"Source {ii+1}: center_of_mass returned NaN or infinite values ({yf}, {xf}); skipping", flush=True)
                 continue
             ycen = int(round(yf))
             xcen = int(round(xf))
-            print(f"Source {i+1}: center at (x, y) = ({xcen}, {ycen})")
+            print(f"Source {ii+1}: center at (x, y) = ({xcen}, {ycen})")
             y0 = int(max(0, ycen - pad))
             y1 = int(min(data.shape[0], ycen + pad))
             x0 = int(max(0, xcen - pad))
             x1 = int(min(data.shape[1], xcen + pad))
-            size_saturated = int(np.sqrt(sum_labels(saturated, labels=sources, index=i+1))/2)
-            area_saturated = sum_labels(saturated, labels=sources, index=i+1)
+            size_saturated = int(np.sqrt(sum_labels(saturated, labels=sources, index=ii+1))/2)
+            area_saturated = sum_labels(saturated, labels=sources, index=ii+1)
             cutout = data[y0:y1, x0:x1]
             init_params = QTable()
             init_params['x'] = [xcen - x0]
@@ -254,13 +254,13 @@ def get_saturated_stars(fitsdata,path_prefix='/orange/adamginsburg/jwst/w51/psfs
                     try:
                         param.bounds = bounds
                         print(f"Set {pname}.bounds = {bounds}")
-                    except Exception:
+                    except (AttributeError, TypeError) as e:
                         # fallback (private attribute) if necessary
                         try:
                             param._bounds = bounds
                             print(f"Set {pname}._bounds = {bounds} (fallback)")
-                        except Exception:
-                            print(f"Could not set bounds for {pname}; parameter object: {param}")
+                        except (AttributeError, TypeError) as e:
+                            print(f"Could not set bounds for {pname}; parameter object: {param}. Error: {e}")
                 else:
                     print(f"Model does not have parameter '{pname}'; param_names={getattr(model,'param_names',None)}")
             # let x_0 be bounds at saturated pixels

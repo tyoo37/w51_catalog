@@ -181,7 +181,7 @@ def shift_individual_catalog(tbl, offsets_table, verbose=True):
     return tbl
 
 
-def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaverage=nanaverage_dask,
+def combine_singleframe(tbls, mergedtbl, max_offset=0.10 * u.arcsec, realign=False, nanaverage=nanaverage_dask,
                         min_offset=0.10*u.arcsec,
                         offsets_table=None,
                         verbose=True
@@ -222,7 +222,7 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
         #column_names = (flux_colname, flux_error_colname, 'qfit', 'cfit', 'flux_init', 'flags', 'local_bkg', 'iter_detected', 'group_id', 'group_size', 'ra', 'dec', 'dra', 'ddec', )
         column_names = (flux_colname, flux_error_colname, 'qfit', 'cfit', 'flux_init', 'flags', 'local_bkg', 'iter_detected', 'group_id', 'group_size', 'ra', 'dec', 'roundness1', 'roundness2', 'sharpness', 'from_sat_catalog')
     
-    # TH added additional loop in the first place to add saturated stars from all table into the first table (25/01/28)
+    # first start from combining all tables into one big table
     for ii, tbl in enumerate(tbls):
         if ii == 0:
             basetbl = tbl
@@ -230,54 +230,10 @@ def combine_singleframe(tbls, max_offset=0.10 * u.arcsec, realign=False, nanaver
             #is_saturated = tbl['from_sat_catalog'] if 'from_sat_catalog' in tbl.colnames else np.zeros(len(tbl), dtype=bool)
             basetbl = table.vstack([basetbl, tbl])
     print(basetbl.colnames)
-    def remove_close_duplicates(basetbl, separation_threshold=0.1*u.arcsec):
-        """
-        Remove stars that are within separation_threshold of each other.
-        Keep saturated stars or brighter stars with priority.
-        
-        Parameters
-        ----------
-        basetbl : astropy.table.Table
-            Table with sky coordinates and 'from_sat_catalog' column
-        separation_threshold : astropy.units.Quantity
-            Maximum separation to consider stars as duplicates
-        
-        Returns
-        -------
-        filtered_table : astropy.table.Table
-            Table with duplicates removed
-        """
-        # Create SkyCoord object from the table
-        coords = basetbl['skycoord_centroid']
-        
-        # Find pairs within threshold
-        idx1, idx2, sep, _ = coords.search_around_sky(coords, separation_threshold)
-        
-        # Remove self-matches
-        mask = idx1 < idx2
-        idx1, idx2 = idx1[mask], idx2[mask]
-        
-        # Determine which stars to remove
-        to_remove = set()
-
-        sat = basetbl['from_sat_catalog']
-        flux = basetbl['flux_fit']
-        sat1 = sat[idx1]
-        sat2 = sat[idx2]
-        one_not_saturated = (sat1 & ~sat2) | ((~sat1) & sat2)
-        idx1_is_brighter = (flux[idx1] >= flux[idx2])
-        both_saturated = (sat1 & sat2)
-        neither_saturated = (~sat1) & (~sat2)
-        # either_saturated = ~neither_saturated
-        keep1 = idx1[(one_not_saturated & sat1) | (idx1_is_brighter & both_saturated) | (neither_saturated)]
-        keep2 = idx2[(one_not_saturated & sat2) | ((~idx1_is_brighter) & both_saturated)]
-        keep = ~mask
-        keep[keep1] = True
-        keep[keep2] = True
-
-        return basetbl[keep]
     
-    basetbl = remove_close_duplicates(basetbl, separation_threshold=min_offset)
+    
+
+    
 
     
     
