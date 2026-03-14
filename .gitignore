@@ -1,5 +1,5 @@
 *.log
 *.fit
 *.fits
-
+python.core*
 *.pyc
