@@ -1525,7 +1525,7 @@ def main():
                                     continue
                                 except Exception as ex:
                                     print(f"Exception for unweighted crowdsource: {ex}, {type(ex)}, {str(ex)}")
-                                    #raise ex
+                                    #raise 
 
                                 print(f'crowdsource phase done.  time elapsed={time.time()-t0}')
 
