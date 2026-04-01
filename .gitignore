@@ -3,3 +3,5 @@
 *.fits
 python.core*
 *.pyc
+*.png
+jwst_plots

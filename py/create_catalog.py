@@ -871,9 +871,13 @@ def do_photometry_step(options, filtername, module, detector, field, basepath,
         # we want original data_ to be untouched for imshowing diagnostics etc.
         # also want 1 pixel buffer around saturated pixels (Jan 30, 2026, TH added to solve F405N issue)
         is_saturated = ndimage.binary_dilation(is_saturated, iterations=1)
+        # NB: added a check for DO_NOT_USE pixels to exclude 4QPM FOVs from being catalog. Otherwise, the spatial matching creates offsets after frame merging.
+        is_bad = (dqarr & dqflags.pixel['DO_NOT_USE']) != 0
+        combined_mask = is_bad | is_saturated
         data_ = data.copy()
         data_[is_saturated] = np.nan
-        mask |= is_saturated
+        #mask |= is_saturated
+        mask = combined_mask
     else:
         data_ = data
 

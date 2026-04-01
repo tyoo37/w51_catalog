@@ -16,10 +16,8 @@ mem=64gb
 #for filter in F560W; do
 for filter in F560W F770W F1000W F1280W F2100W ; do
     for module in mirimage; do
-        
-        sbatch --array=0-4 --job-name=webb-cat-miri-${filter}-${module}-eachexp --output=webb-cat-${filter}-${module}-eachexp_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/py/create_catalog.py --filternames=${filter} --modules=${module} --each-exposure ${dao} --target=w51_miri"
-        
-        
+     
+        sbatch --array=0-4 --job-name=webb-cat-miri-${filter}-${module}-eachexp --output=webb-cat-${filter}-${module}-eachexp_%j-%A_%a.log  --account=astronomy-dept --qos=astronomy-dept-b --ntasks=2 --nodes=1 --mem=${mem} --time=96:00:00 --wrap "python /blue/adamginsburg/t.yoo/from_red/w51/w51_catalog/py/create_catalog.py --filternames=${filter} --modules=${module} --each-exposure ${dao} --target=w51_miri"     
     done
 done
 
