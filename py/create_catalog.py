@@ -706,7 +706,7 @@ def get_filenames(basepath, filtername, proposal_id, field, each_suffix, module,
     # jw02221001001_05101_00022_nrcb3_destreak_o001_crf.fits
         #jw06151002001_02101_00001_mirimage_i2d.fits
 
-    glstr = f'{basepath}/{filtername}/pipeline/jw0{proposal_id}{field}*{module}*_{each_suffix}.fits'
+    glstr = f'{basepath}/{filtername}/pipeline/jw0{proposal_id}{field}{visitid}_*_{module}_{each_suffix}.fits'
     
   
     fglob = glob.glob(glstr)
